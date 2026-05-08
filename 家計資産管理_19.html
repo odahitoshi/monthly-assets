@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家計資産管理</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',sans-serif;background:#111110;color:#e8e8e6;min-height:100vh;padding:1.5rem;}
+.app{max-width:680px;margin:0 auto;}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:8px;}
+.header h2{font-size:20px;font-weight:500;color:#e8e8e6;}
+.month-nav{display:flex;align-items:center;gap:6px;}
+.month-nav button{background:transparent;border:1px solid #444;border-radius:8px;padding:4px 12px;cursor:pointer;font-size:13px;color:#e8e8e6;}
+.month-nav button:hover{background:#2a2a28;}
+.month-label{font-size:14px;font-weight:500;min-width:90px;text-align:center;color:#e8e8e6;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:1.25rem;}
+.metric{background:#1e1e1c;border-radius:8px;padding:.875rem 1rem;}
+.metric .lbl{font-size:11px;color:#aaa;margin-bottom:3px;}
+.metric .val{font-size:18px;font-weight:500;color:#e8e8e6;}
+.metric .chg{font-size:11px;margin-top:2px;}
+.metric .pnl{font-size:11px;margin-top:1px;}
+.chg.up{color:#5dbb2e;} .chg.dn{color:#e05555;} .chg.flat{color:#666;}
+.pnl.up{color:#5dbb2e;} .pnl.dn{color:#e05555;} .pnl.flat{color:#666;}
+.tabs{display:flex;gap:4px;margin-bottom:1rem;border-bottom:1px solid #2e2e2c;}
+.tab{background:transparent;border:none;padding:6px 14px;font-size:13px;cursor:pointer;color:#666;border-bottom:2px solid transparent;margin-bottom:-1px;}
+.tab.active{color:#e8e8e6;border-bottom-color:#e8e8e6;font-weight:500;}
+.section{background:#1a1a18;border:1px solid #2e2e2c;border-radius:12px;padding:1rem 1.25rem;margin-bottom:.875rem;}
+.sec-hdr{display:grid;grid-template-columns:1fr 90px 120px 70px;gap:0;align-items:center;margin-bottom:12px;}
+.sec-title-wrap{display:flex;align-items:center;gap:8px;}
+.sec-title{font-size:22px;font-weight:500;color:#e8e8e6;}
+.sec-chg{font-size:12px;text-align:right;padding-right:8px;}
+.sec-chg.up{color:#5dbb2e;} .sec-chg.dn{color:#e05555;} .sec-chg.flat{color:#666;}
+.sec-total{font-size:22px;font-weight:500;text-align:right;color:#e8e8e6;}
+.sec-pnl{font-size:13px;font-weight:500;text-align:right;padding-left:10px;}
+.sec-pnl.up{color:#5dbb2e;} .sec-pnl.dn{color:#e05555;} .sec-pnl.flat{color:#666;}
+.asset-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,0.8fr) 90px 110px 70px;gap:0;align-items:center;padding:6px 0;border-bottom:1px solid #242422;}
+.asset-row:last-child{border-bottom:none;}
+.aname{font-size:13px;color:#e8e8e6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:16px;}
+.anote{font-size:11px;color:#666;text-align:right;padding-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.achg{font-size:12px;text-align:right;padding-right:8px;}
+.achg.up{color:#5dbb2e;} .achg.dn{color:#e05555;} .achg.flat{color:#666;}
+.abal{font-size:13px;font-weight:500;text-align:right;color:#e8e8e6;}
+.apnl{font-size:12px;text-align:right;padding-left:8px;}
+.apnl.up{color:#5dbb2e;} .apnl.dn{color:#e05555;} .apnl.flat{color:#666;}
+.empty{font-size:13px;color:#666;padding:8px 0;}
+.chart-card{background:#1a1a18;border:1px solid #2e2e2c;border-radius:12px;padding:1rem 1.25rem;margin-bottom:.875rem;}
+.chart-card-title{font-size:13px;font-weight:500;color:#e8e8e6;margin-bottom:12px;}
+.pie-legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;color:#e8e8e6;}
+.legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.import-section{display:flex;align-items:center;gap:12px;background:#1a1a18;border:1px solid #2e2e2c;border-radius:12px;padding:.75rem 1.25rem;margin-bottom:1.25rem;}
+.import-label{font-size:13px;color:#aaa;white-space:nowrap;}
+.import-btn{background:transparent;border:1px solid #444;border-radius:8px;padding:5px 16px;font-size:13px;cursor:pointer;color:#ccc;white-space:nowrap;}
+.import-btn:hover{background:#2a2a28;}
+.import-result{font-size:12px;padding:4px 10px;border-radius:6px;display:none;flex:1;}
+.import-result.ok{background:#1a3010;color:#7dd44e;}
+.import-result.err{background:#2e1010;color:#e07070;}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="header">
+  <h2>家計資産管理</h2>
+  <div class="month-nav">
+    <button onclick="prevMonth()">&#8249;</button>
+    <span class="month-label" id="monthLabel"></span>
+    <button onclick="nextMonth()">&#8250;</button>
+  </div>
+</div>
+
+<div class="import-section">
+  <span class="import-label">CSVインポート</span>
+  <label class="import-btn">ファイルを選択
+    <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="handleFile(this.files[0])">
+  </label>
+  <div class="import-result" id="importResult"></div>
+</div>
+
+<div class="summary-grid">
+  <div class="metric">
+    <div class="lbl">総資産</div>
+    <div class="val" id="mTotal">—</div>
+    <div class="chg flat" id="mTotalChg">前月比 —</div>
+  </div>
+  <div class="metric">
+    <div class="lbl">株式</div>
+    <div class="val" id="mStock">—</div>
+    <div class="chg flat" id="mStockChg"></div>
+    <div class="pnl flat" id="mStockPnl"></div>
+  </div>
+  <div class="metric">
+    <div class="lbl">投資信託</div>
+    <div class="val" id="mFund">—</div>
+    <div class="chg flat" id="mFundChg"></div>
+    <div class="pnl flat" id="mFundPnl"></div>
+  </div>
+  <div class="metric">
+    <div class="lbl">預金・現金</div>
+    <div class="val" id="mCash">—</div>
+    <div class="chg flat" id="mCashChg"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="setTab('list')">一覧</button>
+  <button class="tab" onclick="setTab('chart')">グラフ</button>
+</div>
+
+<div id="tabList">
+  <div id="secStock" class="section"></div>
+  <div id="secFund" class="section"></div>
+  <div id="secCash" class="section"></div>
+</div>
+
+<div id="tabChart" style="display:none;">
+  <!-- 折れ線グラフ：資産合計推移 -->
+  <div class="chart-card">
+    <div class="chart-card-title">資産合計推移</div>
+    <div style="position:relative;width:100%;height:220px;margin-top:4px;">
+      <canvas id="trendLine"></canvas>
+    </div>
+  </div>
+  <!-- 種別構成 -->
+  <div class="chart-card">
+    <div class="chart-card-title">種別構成</div>
+    <div id="legendCat" class="pie-legend"></div>
+    <div style="position:relative;width:100%;height:260px;margin-top:12px;">
+      <canvas id="catPie"></canvas>
+    </div>
+  </div>
+  <!-- 銘柄別構成 -->
+  <div class="chart-card">
+    <div class="chart-card-title">株式・投資信託 銘柄別構成</div>
+    <div style="position:relative;width:100%;height:320px;margin-top:4px;">
+      <canvas id="topPie"></canvas>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const INIT_DATA={months:['2026-03','2026-04','2026-05'],assets:[
+  {id:1,name:'VTI',cat:'株式',note:'',cost:3578228,balances:{'2026-03':6106720,'2026-04':6761936,'2026-05':null}},
+  {id:2,name:'アルトナー',cat:'株式',note:'',cost:1063500,balances:{'2026-03':2865000,'2026-04':2863500,'2026-05':null}},
+  {id:3,name:'日本触媒',cat:'株式',note:'',cost:930500,balances:{'2026-03':1135000,'2026-04':1078500,'2026-05':null}},
+  {id:4,name:'トヨタ自動車',cat:'株式',note:'',cost:1120000,balances:{'2026-03':1289600,'2026-04':1209200,'2026-05':null}},
+  {id:5,name:'イオン',cat:'株式',note:'',cost:190000,balances:{'2026-03':571650,'2026-04':453000,'2026-05':null}},
+  {id:6,name:'三菱UFJ銀行',cat:'株式',note:'',cost:405000,balances:{'2026-03':524200,'2026-04':563400,'2026-05':null}},
+  {id:7,name:'三井住友銀行',cat:'株式',note:'',cost:930500,balances:{'2026-03':1010600,'2026-04':1102400,'2026-05':null}},
+  {id:8,name:'東京海上',cat:'株式',note:'',cost:579800,balances:{'2026-03':726800,'2026-04':720200,'2026-05':null}},
+  {id:9,name:'メイテック',cat:'株式',note:'',cost:3373800,balances:{'2026-03':3237000,'2026-04':3142000,'2026-05':null}},
+  {id:21,name:'eMAXIS Slim All Country',cat:'投資信託',note:'',cost:3207302,balances:{'2026-03':3335747,'2026-04':3730140,'2026-05':null}},
+  {id:22,name:'三菱純金ファンド',cat:'投資信託',note:'',cost:2000000,balances:{'2026-03':2183617,'2026-04':2209934,'2026-05':null}},
+  {id:23,name:'eMAXIS Slim S&P 500',cat:'投資信託',note:'',cost:2400000,balances:{'2026-03':2209701,'2026-04':2483348,'2026-05':null}},
+  {id:24,name:'eMAXIS Slim S&P 500 積立',cat:'投資信託',note:'',cost:1400000,balances:{'2026-03':1403135,'2026-04':1683478,'2026-05':null}},
+  {id:25,name:'eMAXIS Slim TOPIX',cat:'投資信託',note:'',cost:2000000,balances:{'2026-03':2088920,'2026-04':2252775,'2026-05':null}},
+  {id:26,name:'Daiwa iFreeNEXT FANG+',cat:'投資信託',note:'',cost:1600000,balances:{'2026-03':1294528,'2026-04':1599059,'2026-05':null}},
+  {id:27,name:'米国MMF',cat:'投資信託',note:'',cost:1953009,balances:{'2026-03':2226103,'2026-04':2263696,'2026-05':null}},
+  {id:51,name:'iDeCo',cat:'投資信託',note:'',cost:220000,balances:{'2026-03':231187,'2026-04':254001,'2026-05':null}},
+  {id:52,name:'確定拠出（会社）',cat:'投資信託',note:'',cost:699715,balances:{'2026-03':1496930,'2026-04':1674933,'2026-05':null}},
+  {id:101,name:'SBI証券余力（平）',cat:'預金',note:'',cost:null,balances:{'2026-03':410746,'2026-04':768416,'2026-05':null}},
+  {id:102,name:'SBI証券余力（真）',cat:'預金',note:'',cost:null,balances:{'2026-03':2346896,'2026-04':2260204,'2026-05':null}},
+  {id:103,name:'住信SBI信託銀行',cat:'預金',note:'生活資金',cost:null,balances:{'2026-03':446039,'2026-04':246641,'2026-05':null}},
+  {id:104,name:'三井住友銀行',cat:'預金',note:'恒平学費関係',cost:null,balances:{'2026-03':2097380,'2026-04':1767110,'2026-05':null}},
+  {id:105,name:'三菱UFJ銀行',cat:'預金',note:'会社経費口座',cost:null,balances:{'2026-03':46321,'2026-04':41451,'2026-05':null}},
+  {id:106,name:'池田泉州銀行',cat:'預金',note:'彩ちゃん学費関係と定期150万円',cost:null,balances:{'2026-03':1580582,'2026-04':1580582,'2026-05':null}},
+  {id:107,name:'三井住友信託銀行',cat:'預金',note:'定期 2027/7/12満期解約予定',cost:null,balances:{'2026-03':3024502,'2026-04':3024502,'2026-05':null}},
+  {id:109,name:'ソフトバンク社債',cat:'預金',note:'',cost:null,balances:{'2026-03':1000000,'2026-04':1000000,'2026-05':null}},
+],nextId:200};
+
+const CAT_MAP={'株式':'株式','投資信託':'投資信託','預金':'預金'};
+const CAT_COLORS={'株式':'#3A6B9A','投資信託':'#2D7A5E','預金':'#8A6A2E'};
+const COLOR_STOCK='#3A6B9A', COLOR_FUND='#2D7A5E';
+
+let S=JSON.parse(localStorage.getItem('assetTrackerV12')||'null')||INIT_DATA;
+let curIdx=S.months.findIndex(m=>{const n=new Date();return m===`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;});
+if(curIdx<0)curIdx=S.months.length-1;
+let activeTab='list',trendChart=null,catChart=null,topChart=null;
+
+function saveS(){localStorage.setItem('assetTrackerV12',JSON.stringify(S));}
+function fmt(n){return n==null?'—':'¥'+Math.round(n).toLocaleString('ja-JP');}
+function fmtPct(v,t){return t?Math.round(v/t*100)+'%':'—';}
+function fmtChg(d){
+  if(d==null)return{txt:'—',cls:'flat'};
+  if(d>0)return{txt:fmt(d),cls:'up'};
+  if(d<0)return{txt:fmt(d),cls:'dn'};
+  return{txt:'±0',cls:'flat'};
+}
+function fmtPnl(bal,cost){
+  if(bal==null||cost==null||cost===0)return{txt:'',cls:'flat'};
+  const pct=(bal-cost)/cost*100;
+  const sign=pct>=0?'+':'';
+  return{txt:`${sign}${pct.toFixed(1)}%`,cls:pct>0?'up':pct<0?'dn':'flat'};
+}
+function calcCatPnl(cat,mk){
+  const items=S.assets.filter(a=>a.cat===cat&&a.cost!=null&&a.balances[mk]!=null);
+  if(!items.length)return{txt:'',cls:'flat'};
+  const totalBal=items.reduce((s,a)=>s+a.balances[mk],0);
+  const totalCost=items.reduce((s,a)=>s+a.cost,0);
+  if(!totalCost)return{txt:'',cls:'flat'};
+  const pct=(totalBal-totalCost)/totalCost*100;
+  const sign=pct>=0?'+':'';
+  return{txt:`${sign}${pct.toFixed(1)}%`,cls:pct>0?'up':pct<0?'dn':'flat'};
+}
+function getCurMonth(){return S.months[curIdx];}
+function getPrevMonth(){return curIdx>0?S.months[curIdx-1]:null;}
+function prevMonth(){if(curIdx>0){curIdx--;render();}}
+function nextMonth(){
+  if(curIdx<S.months.length-1){curIdx++;render();}
+  else{
+    const last=S.months[S.months.length-1];
+    const[y,m]=last.split('-').map(Number);
+    const nm=m===12?1:m+1,ny=m===12?y+1:y;
+    const key=`${ny}-${String(nm).padStart(2,'0')}`;
+    S.months.push(key);S.assets.forEach(a=>{a.balances[key]=null;});
+    curIdx=S.months.length-1;saveS();render();
+  }
+}
+function setTab(t){
+  activeTab=t;
+  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active',el.textContent===(t==='list'?'一覧':'グラフ')));
+  document.getElementById('tabList').style.display=t==='list'?'':'none';
+  document.getElementById('tabChart').style.display=t==='chart'?'':'none';
+  if(t==='chart')renderCharts();
+}
+function catSum(cat,mk){return S.assets.filter(a=>a.cat===cat).reduce((s,a)=>s+(a.balances[mk]||0),0);}
+function totalSum(mk){return S.assets.reduce((s,a)=>s+(a.balances[mk]||0),0);}
+function setChg(elId,cur,prev){
+  const el=document.getElementById(elId);if(!el)return;
+  const{txt,cls}=fmtChg(prev!=null?cur-prev:null);
+  el.textContent='前月比 '+txt;el.className='chg '+cls;
+}
+function handleFile(file){
+  if(!file||!file.name.endsWith('.csv')){showResult('CSVファイルを選択してください','err');return;}
+  const reader=new FileReader();
+  reader.onload=e=>parseCSV(e.target.result);
+  reader.readAsText(file,'UTF-8');
+}
+function parseCSV(text){
+  try{
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    let headerIdx=-1;
+    for(let i=0;i<lines.length;i++){
+      if(lines[i].includes('銘柄名')&&lines[i].includes('種別')){headerIdx=i;break;}
+    }
+    if(headerIdx<0){showResult('ヘッダー行が見つかりません','err');return;}
+    const headers=parseLine(lines[headerIdx]);
+    const monthCols=[];
+    headers.forEach((h,i)=>{
+      const m=h.match(/(\d{4})年(\d{1,2})月/);
+      if(m)monthCols.push({idx:i,key:`${m[1]}-${String(m[2]).padStart(2,'0')}`});
+    });
+    if(!monthCols.length){showResult('月の列が見つかりません','err');return;}
+    const costIdx=headers.findIndex(h=>h.trim()==='取得');
+    const noteIdx=headers.findIndex(h=>h.trim()==='備考');
+    monthCols.forEach(({key})=>{
+      if(!S.months.includes(key)){
+        S.months.push(key);S.months.sort();
+        S.assets.forEach(a=>{if(!(key in a.balances))a.balances[key]=null;});
+      }
+    });
+    let updated=0,added=0;
+    for(let i=headerIdx+1;i<lines.length;i++){
+      const cols=parseLine(lines[i]);
+      const name=(cols[0]||'').trim();
+      const catRaw=(cols[1]||'').trim();
+      if(!name||!catRaw)continue;
+      const cat=CAT_MAP[catRaw]||catRaw;
+      if(!['株式','投資信託','預金'].includes(cat))continue;
+      const note=noteIdx>=0?(cols[noteIdx]||'').trim():'';
+      const costRaw=costIdx>=0?(cols[costIdx]||'').trim():'';
+      const cost=costRaw?parseFloat(costRaw.replace(/[¥,\s]/g,'')):null;
+      let asset=S.assets.find(a=>a.name.trim()===name);
+      if(!asset){
+        asset={id:S.nextId++,name,cat,note,cost:isNaN(cost)?null:cost,balances:{}};
+        S.months.forEach(mk=>{asset.balances[mk]=null;});
+        S.assets.push(asset);added++;
+      } else {
+        if(cost!=null&&!isNaN(cost))asset.cost=cost;
+        if(note)asset.note=note;
+      }
+      monthCols.forEach(({idx,key})=>{
+        const val=parseFloat((cols[idx]||'').replace(/[¥,\s]/g,''));
+        if(!isNaN(val)){asset.balances[key]=val;updated++;}
+      });
+    }
+    S.months.sort();curIdx=S.months.length-1;
+    saveS();render();
+    showResult(`インポート完了：${updated}件更新${added?'、'+added+'件追加':''}`, 'ok');
+  }catch(e){showResult('解析エラー：'+e.message,'err');}
+}
+function parseLine(line){
+  const result=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){result.push(cur);cur='';}
+    else cur+=c;
+  }
+  result.push(cur);return result;
+}
+function showResult(msg,type){
+  const el=document.getElementById('importResult');
+  el.textContent=msg;el.className='import-result '+type;el.style.display='block';
+  setTimeout(()=>{el.style.display='none';},5000);
+  document.getElementById('csvInput').value='';
+}
+function renderSection(secId,cat,mk,pmk){
+  const el=document.getElementById(secId);
+  const items=S.assets.filter(a=>a.cat===cat);
+  const sum=items.reduce((s,a)=>s+(a.balances[mk]||0),0);
+  const prevSum=pmk?items.reduce((s,a)=>s+(a.balances[pmk]||0),0):null;
+  const sumDiff=prevSum!=null?sum-prevSum:null;
+  const{txt:sTxt,cls:sCls}=fmtChg(sumDiff);
+  const{txt:secPnlTxt,cls:secPnlCls}=(['株式','投資信託'].includes(cat))
+    ? calcCatPnl(cat,mk) : {txt:'',cls:'flat'};
+  let html=`<div class="sec-hdr">
+    <div class="sec-title-wrap"><span class="sec-title">${cat}</span></div>
+    <span class="sec-chg ${sCls}">${sumDiff!=null?sTxt:''}</span>
+    <span class="sec-total">${fmt(sum)}</span>
+    <span class="sec-pnl ${secPnlCls}">${secPnlTxt}</span>
+  </div>`;
+  if(!items.length){html+='<div class="empty">データなし</div>';el.innerHTML=html;return;}
+  items.sort((a,b)=>(b.balances[mk]||0)-(a.balances[mk]||0));
+  items.forEach(a=>{
+    const bal=a.balances[mk],prev=pmk?a.balances[pmk]:null;
+    const diff=(bal!=null&&prev!=null)?bal-prev:null;
+    const{txt,cls}=fmtChg(diff);
+    const{txt:pnlTxt,cls:pnlCls}=fmtPnl(bal,a.cost||null);
+    html+=`<div class="asset-row">
+      <span class="aname">${a.name}</span>
+      <span class="anote">${a.note||''}</span>
+      <span class="achg ${cls}">${diff!=null?txt:''}</span>
+      <span class="abal">${fmt(bal)}</span>
+      <span class="apnl ${pnlCls}">${pnlTxt}</span>
+    </div>`;
+  });
+  el.innerHTML=html;
+}
+function buildLegend(elId,labels,colors,values,total){
+  document.getElementById(elId).innerHTML=labels.map((l,i)=>`
+    <span class="legend-item"><span class="legend-dot" style="background:${colors[i]};"></span>${l} ${fmtPct(values[i],total)}</span>`).join('');
+}
+
+// 月ラベル整形（例：2026-03 → 3月）
+function monthLabel(mk){
+  const[,m]=mk.split('-').map(Number);
+  return m+'月';
+}
+
+function renderCharts(){
+  const mk=getCurMonth();
+
+  // ---- 折れ線グラフ：全月の合計 ----
+  const validMonths=S.months.filter(m=>totalSum(m)>0);
+  const trendLabels=validMonths.map(monthLabel);
+  const trendData=validMonths.map(m=>totalSum(m));
+
+  if(trendChart){trendChart.destroy();trendChart=null;}
+  trendChart=new Chart(document.getElementById('trendLine'),{
+    type:'line',
+    data:{
+      labels:trendLabels,
+      datasets:[{
+        data:trendData,
+        borderColor:'#5A8FC0',
+        backgroundColor:'rgba(90,143,192,0.15)',
+        borderWidth:2,
+        pointRadius:4,
+        pointBackgroundColor:'#5A8FC0',
+        pointBorderColor:'#1a1a18',
+        pointBorderWidth:2,
+        tension:0.3,
+        fill:true,
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            label:d=>`合計: ${fmt(d.raw)}`
+          }
+        }
+      },
+      scales:{
+        x:{
+          grid:{color:'rgba(255,255,255,0.06)'},
+          ticks:{color:'#aaa',font:{size:11}}
+        },
+        y:{
+          grid:{color:'rgba(255,255,255,0.06)'},
+          ticks:{
+            color:'#aaa',
+            font:{size:11},
+            maxTicksLimit:2,
+            callback:v=>Math.round(v/1000).toLocaleString('ja-JP')
+          }
+        }
+      }
+    }
+  });
+
+  // ---- 種別構成 ----
+  const cats=['株式','投資信託','預金'];
+  const catVals=cats.map(c=>catSum(c,mk));
+  const catTotal=catVals.reduce((s,v)=>s+v,0);
+  const catColors=cats.map(c=>CAT_COLORS[c]);
+  buildLegend('legendCat',cats,catColors,catVals,catTotal);
+  if(catChart){catChart.destroy();catChart=null;}
+  catChart=new Chart(document.getElementById('catPie'),{
+    type:'doughnut',
+    data:{labels:cats,datasets:[{data:catVals,backgroundColor:catColors,borderWidth:2,borderColor:'#1a1a18'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:d=>`${d.label}: ${fmt(d.raw)} (${fmtPct(d.raw,catTotal)})`}}}}
+  });
+
+  // ---- 銘柄別構成 ----
+  const inv=S.assets.filter(a=>(a.cat==='株式'||a.cat==='投資信託')&&a.balances[mk]!=null&&a.balances[mk]>0)
+    .sort((a,b)=>b.balances[mk]-a.balances[mk]);
+  const invVals=inv.map(a=>a.balances[mk]);
+  const invTotal=invVals.reduce((s,v)=>s+v,0);
+  const invColors=inv.map(a=>a.cat==='株式'?COLOR_STOCK:COLOR_FUND);
+  if(topChart){topChart.destroy();topChart=null;}
+  topChart=new Chart(document.getElementById('topPie'),{
+    type:'doughnut',
+    data:{labels:inv.map(a=>a.name),datasets:[{data:invVals,backgroundColor:invColors,borderWidth:2,borderColor:'#1a1a18'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:d=>`${d.label}: ${fmt(d.raw)} (${fmtPct(d.raw,invTotal)})`}}}}
+  });
+}
+
+function render(){
+  const mk=getCurMonth(),pmk=getPrevMonth();
+  const months=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const[y,m]=mk.split('-').map(Number);
+  document.getElementById('monthLabel').textContent=`${y}年${months[m-1]}`;
+  const tot=totalSum(mk),ptot=pmk?totalSum(pmk):null;
+  const stk=catSum('株式',mk),pstk=pmk?catSum('株式',pmk):null;
+  const fnd=catSum('投資信託',mk),pfnd=pmk?catSum('投資信託',pmk):null;
+  const csh=catSum('預金',mk),pcsh=pmk?catSum('預金',pmk):null;
+  document.getElementById('mTotal').textContent=fmt(tot);
+  document.getElementById('mStock').textContent=fmt(stk);
+  document.getElementById('mFund').textContent=fmt(fnd);
+  document.getElementById('mCash').textContent=fmt(csh);
+  setChg('mTotalChg',tot,ptot);
+  [['mStockChg',stk,pstk],['mFundChg',fnd,pfnd],['mCashChg',csh,pcsh]].forEach(([id,cur,prev])=>{
+    const{txt,cls}=fmtChg(prev!=null?cur-prev:null);
+    const el=document.getElementById(id);el.textContent='前月比 '+txt;el.className='chg '+cls;
+  });
+  ['株式','投資信託'].forEach(cat=>{
+    const elId=cat==='株式'?'mStockPnl':'mFundPnl';
+    const el=document.getElementById(elId);if(!el)return;
+    const{txt,cls}=calcCatPnl(cat,mk);
+    el.textContent=txt;el.className='pnl '+cls;
+  });
+  renderSection('secStock','株式',mk,pmk);
+  renderSection('secFund','投資信託',mk,pmk);
+  renderSection('secCash','預金',mk,pmk);
+  if(activeTab==='chart')renderCharts();
+}
+render();
+</script>
+</body>
+</html>
